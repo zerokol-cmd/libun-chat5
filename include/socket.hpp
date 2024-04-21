@@ -11,7 +11,6 @@
 #pragma comment(lib, "Ws2_32.lib")
 namespace un {
 class socket {
-  SOCKET Client_Socket_ = INVALID_SOCKET;
   SOCKET ClientSocket = INVALID_SOCKET;
   bool inited = false;
   WSADATA wsaData;

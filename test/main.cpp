@@ -18,11 +18,10 @@ int main(int argc, char **argv) {
       std::cout << "connected!";
       try {
         std::string a = chat->RecieveMessage();
-        std::cout << a;
+        std::cout << a << std::endl;
       } catch (std::exception &e) {
         std::cout << "expection" << e.what() << std::endl;
       }
-      DebugBreak();
     }
   } catch (std::exception &e) {
     std::cerr << e.what() << std::endl;

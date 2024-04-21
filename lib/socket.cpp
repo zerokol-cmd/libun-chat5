@@ -1,23 +1,21 @@
 #include "shared.hpp"
 #include <WinSock2.h>
+#include <iostream>
 #include <socket.hpp>
 #include <stdexcept>
 #include <string>
-un::socket::socket() {}
+un::socket::socket() {
+  int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+  if (iResult != 0) {
+    throw std::runtime_error("failed to startup wsa");
+  }
+}
 un::socket::~socket() {
-  shutdown(ClientSocket, SD_SEND);
-  shutdown(ClientSocket, SD_SEND);
-  closesocket(ClientSocket);
-  closesocket(ClientSocket);
-  WSACleanup();
+
 }
 un::socket::socket(const std::string &ip, uint16_t port) {
   struct addrinfo *result = NULL, *ptr = NULL, hints;
   int iResult;
-  iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-  if (iResult != 0) {
-    throw std::runtime_error("failed to startup wsa");
-  }
 
   ZeroMemory(&hints, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
@@ -57,11 +55,6 @@ un::socket::socket(uint16_t port) {
   struct addrinfo *result = NULL;
   struct addrinfo hints;
 
-  iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-  if (iResult != 0) {
-    throw std::runtime_error("failed to Initialize wsa sockets");
-  }
-
   ZeroMemory(&hints, sizeof(hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
@@ -72,30 +65,30 @@ un::socket::socket(uint16_t port) {
   if (iResult != 0) {
     throw std::runtime_error("port not found");
   }
-
-  ClientSocket =
+  SOCKET ConnectionSocket;
+  ConnectionSocket =
       ::socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-  if (ClientSocket == INVALID_SOCKET) {
+  if (ConnectionSocket == INVALID_SOCKET) {
     throw std::runtime_error("failed to init socket");
   }
 
-  iResult = bind(ClientSocket, result->ai_addr, (int)result->ai_addrlen);
+  iResult = bind(ConnectionSocket, result->ai_addr, (int)result->ai_addrlen);
   if (iResult == SOCKET_ERROR) {
     throw std::runtime_error("failed to bind socket");
   }
 
   freeaddrinfo(result);
 
-  iResult = listen(ClientSocket, SOMAXCONN);
+  iResult = listen(ConnectionSocket, SOMAXCONN);
   if (iResult == SOCKET_ERROR) {
     throw std::runtime_error("failed to listen socket");
   }
 
-  ClientSocket = accept(ClientSocket, NULL, NULL);
+  ClientSocket = accept(ConnectionSocket, NULL, NULL);
   if (ClientSocket == INVALID_SOCKET) {
     throw std::runtime_error("failed to accept connection");
   }
-  closesocket(ClientSocket);
+  closesocket(ConnectionSocket);
 
   inited = true;
 }
@@ -103,7 +96,8 @@ bytes un::socket::receive() {
   bytes result;
   result.resize(4096);
   if (recv(ClientSocket, (char *)result.data(), 4096, 0) == SOCKET_ERROR) {
-    throw std::runtime_error(std::string( "failed to receive buffer ")+std::to_string(WSAGetLastError()));
+    throw std::runtime_error(std::string("failed to receive buffer") +
+                             std::to_string(WSAGetLastError()));
   }
   return result;
 }
@@ -113,6 +107,7 @@ void un::socket::send(bytes b) {
   }
   if (::send(ClientSocket, (const char *)b.data(), b.size(), 0) ==
       SOCKET_ERROR) {
-    throw std::runtime_error(std::string("failed to send data ")+std::to_string(WSAGetLastError()));
+    throw std::runtime_error(std::string("failed to send data ") +
+                             std::to_string(WSAGetLastError()));
   }
 }
