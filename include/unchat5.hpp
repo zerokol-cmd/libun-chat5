@@ -2,9 +2,11 @@
 #include <cstdint>
 #include <shared.hpp>
 #include <socket.hpp>
+#include <protocol.hpp>
 #undef SendMessage
 class base_chat {
 protected:
+
   un::socket socket_;
 
 public:

@@ -10,9 +10,7 @@ un::socket::socket() {
     throw std::runtime_error("failed to startup wsa");
   }
 }
-un::socket::~socket() {
-
-}
+un::socket::~socket() {}
 un::socket::socket(const std::string &ip, uint16_t port) {
   struct addrinfo *result = NULL, *ptr = NULL, hints;
   int iResult;
