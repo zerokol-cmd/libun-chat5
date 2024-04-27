@@ -1,95 +1,158 @@
-#include <cstdint>
+#include <exception>
+#include <fstream>
 #include <iostream>
+#include <json/reader.h>
 #include <json/value.h>
-#include <stdexcept>
+#include <memory>
+#include <regex>
+#include <set>
 #include <string>
+#include <variant>
 #include <vector>
 using bytes = std::vector<uint8_t>;
-using input_directorion = std::pair<int, std::string>;
-enum class ProcessType {
-  Encode,
-  Decode,
-};
-class cryptor_base {
+#define INDEX_DEPENDECIES_NOT_FOUND -1
+#define ENCRYPTION_LAYER_INDEX -69
+class encryptor_singletone {
 public:
-  virtual bytes process(ProcessType type, std::vector<bytes> input) = 0;
+  static bytes encode(const std::string &encryptor_name,
+                      std::vector<bytes> input) {
+
+    return {};
+  }
+};
+struct encoder_options {
+  bytes nonce;
+  bytes aad;
 };
 class node {
 public:
+  std::string name;
   std::vector<node> dependencies;
-  std::vector<input_directorion> input;
-  size_t inputs;
-  bytes return_value;
-  std::string cryptor_name;
-  std::unique_ptr<cryptor_base> cryptor;
-  void process(ProcessType type) {
-    for (auto &node_ : dependencies) {
-      node_.process(type);
+  encoder_options cryptor_options;
+  // input number to node witch returns
+  std::map<int, int> input_redirector;
+  size_t input_size;
+  bytes encrypt() {
+    std::vector<bytes> input;
+    input.resize(input_size);
+    for (auto &a : input_redirector) {
+      input[a.first] = dependencies[a.second].encrypt();
     }
-    std::vector<bytes> redirected_input;
-    for (auto &redirection : input) {
-       redirected_input.push_back(dependencies[redirection.first].return_value);
+    return encryptor_singletone::encode(this->name, input);
+  }
+};
+Json::Value findOutputNode(Json::Value nodes) {
+  Json::Value output;
+  for (auto node : nodes) {
+    try {
+      if (node["output"].asBool() == true) {
+        output = node;
+      }
+    } catch (std::exception &e) {
     }
-    cryptor.get()->process(type, redirected_input);
   }
-};
-class scrypt : public cryptor_base {
-public:
-  bytes return_value;
-  virtual bytes process(ProcessType type, std::vector<bytes> input) override {
-    printf("scrypt called");
-    return {};
+  return output;
+}
+std::pair<int, std::string> parseExpression(const std::string &expression) {
+  std::regex regexp(R"(\$index(\d+)\.(.+))");
+  std::regex encryption(R"(\$(encryption)\.(.+))");
+  std::smatch matches;
+  std::regex_search(expression, matches, regexp);
+  if (matches[0].matched == true) {
+    return {std::atoi(matches.str(1).c_str()), matches.str(2)};
   }
-};
-class HKDF : public cryptor_base {
-public:
-  virtual bytes process(ProcessType type, std::vector<bytes> input) override {
-    printf("crypting two keys process started\n");
-    return {};
+  std::regex_search(expression, matches, encryption);
+  if (matches[0].matched == true) {
+    return {ENCRYPTION_LAYER_INDEX, matches.str(2)};
   }
-};
-class Chacha30 : public cryptor_base {
-public:
-  virtual bytes process(ProcessType type, std::vector<bytes> input) override {
-    printf("chacha process started\n");
-    return {};
+  return {INDEX_DEPENDECIES_NOT_FOUND, {}};
+}
+Json::Value getNodeByIndex(int index, Json::Value root) {
+  for (auto json_node : root) {
+    if (json_node["index"].asInt() == index) {
+      return json_node;
+    }
   }
-};
+  return {}; // not found
+}
 
-std::vector<input_directorion>
-getInputRedirectionForProperty(Json::Value value,
-                               const std::string &propertyName) {
-  return {};
-}
-struct algorithm_options {
-  size_t input_count;
-  std::string full_name;
-};
-algorithm_options getAlgorithmOptions(const std::string &algorithmName) {
-  if (algorithmName == "XChaCha20") {
-    return {1, "XChaCha20-Poly1305-IETF"};
+std::pair<std::vector<Json::Value>, std::map<int, int>>
+getDependentNodes(Json::Value input, const Json::Value &nodes) {
+  std::set<int> required_node_indexes;
+  std::map<int, int> return_node;
+  for (auto iterator = input.begin(); iterator != input.end(); iterator++) {
+    int expression_result{INDEX_DEPENDECIES_NOT_FOUND};
+    int a = 0;
+    switch (iterator->type()) {
+    case Json::ValueType::stringValue:
+      expression_result = parseExpression(iterator->asString()).first;
+      if (expression_result > 0) {
+        required_node_indexes.insert(expression_result);
+      }
+      break;
+    case Json::ValueType::arrayValue:
+      a = 0;
+      for (const auto &x : *iterator) {
+        expression_result = parseExpression(x.asString()).first;
+        if (expression_result > 0) {
+          required_node_indexes.insert(expression_result);
+          return_node.insert({a, expression_result});
+        }
+      }
+      a++;
+      break;
+    default: // чтобы не выебывался
+      break;
+    }
   }
-  throw std::runtime_error("algorithm not found");
-  return {};
+  std::vector<Json::Value> required_nodes;
+  for (int a : required_node_indexes) {
+    required_nodes.push_back(getNodeByIndex(a, nodes));
+  }
+  return {required_nodes, return_node};
 }
-std::vector<Json::Value> getDependencies(Json::Value node) { return {}; }
-cryptor_base *createCryptorByName(const std::string &algorithm) {
-  return dynamic_cast<cryptor_base *>(new Chacha30());
-}
-node generateNode(Json::Value json_node) {
+enum ConnectionType { Client, Server };
+node generateNode(const Json::Value &json_node, const Json::Value &nodes) {
   node Node;
-  for (auto node : getDependencies(json_node)) {
-    Node.dependencies.push_back(generateNode(node));
+  std::vector<node> dependencies{};
+  auto dependent_pair = getDependentNodes(json_node, nodes);
+  for (const auto &a : dependent_pair.first) {
+    try {
+      dependencies.push_back(generateNode(a, nodes));
+    } catch (std::exception &e) {
+      std::cerr << "error:" << e.what() << std::endl;
+    }
   }
-  algorithm_options options =
-      getAlgorithmOptions(json_node["method"].asString());
-  Node.inputs = options.input_count;
-  Node.input.resize(Node.inputs);
-  Node.input = getInputRedirectionForProperty(json_node, "input");
-
-  Node.cryptor_name = options.full_name;
-  Node.cryptor.reset(createCryptorByName(options.full_name));
-  return Node;
+  Node.name = json_node["method"].asString();
+  Node.dependencies = dependencies;
+  Node.input_redirector = dependent_pair.second;
 }
+node generateGraph(Json::Value json_node, ConnectionType type) {
+  node root_node;
+  Json::Value output_node = findOutputNode(json_node["keyexchange"]);
+  std::cout << output_node["method"].asString() << std::endl;
+  node NOde = generateNode(output_node, json_node["keyexchange"]);
+  std::cout << NOde.name << std::endl;
+  std::cout << '\t';
+  for (auto &dep : NOde.dependencies) {
+    std::cout << "dependent nodes:" << dep.name << std::endl;
+    std::cout << '\t';
+  }
+  return root_node;
+};
 
-int main() { return 0; }
+int main(int argc, char **argv) {
+  if (argc < 2) {
+    return -1;
+  }
+  std::ifstream file{std::string(argv[1])};
+  Json::Value root;
+
+  Json::CharReaderBuilder builder;
+  parseFromStream(builder, file, &root, nullptr);
+  node result = generateGraph(root, Client);
+  result.encrypt();
+  auto pair = parseExpression("$index1.file");
+  std::cout << pair.first << std::endl;
+  std::cout << pair.second << std::endl;
+}
