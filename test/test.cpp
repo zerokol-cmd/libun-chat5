@@ -153,7 +153,7 @@ enum ConnectionType
 enum class type
 {
   int_,
-  bytes,
+  file,
   string,
 };
 inline bytes readFile(const std::string &filePath)
@@ -182,7 +182,7 @@ evaluateExpression(const std::string &expression)
   std::regex_search(expression, match, int_regex);
   if (match[0].matched)
   {
-    return {type::bytes, readFile(match.str(1))};
+    return {type::file, match.str(1)};
   }
   return {type::string, expression};
 }
