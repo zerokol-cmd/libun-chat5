@@ -74,17 +74,11 @@ Json::Value findOutputNode(Json::Value nodes)
 std::pair<int, std::string> parseExpression(const std::string &expression)
 {
   std::regex regexp(R"(\$index(\d+)\.(.+))");
-  std::regex encryption(R"(\$(encryption)\.(.+))");
   std::smatch matches;
   std::regex_search(expression, matches, regexp);
   if (matches[0].matched == true)
   {
     return {std::atoi(matches.str(1).c_str()), matches.str(2)};
-  }
-  std::regex_search(expression, matches, encryption);
-  if (matches[0].matched == true)
-  {
-    return {ENCRYPTION_LAYER_INDEX, matches.str(2)};
   }
   return {INDEX_DEPENDECIES_NOT_FOUND, {}};
 }
