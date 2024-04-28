@@ -10,13 +10,23 @@
 #include <variant>
 #include <vector>
 using bytes = std::vector<uint8_t>;
+using types = std::variant<bytes, std::string, int>;
+
 #define INDEX_DEPENDECIES_NOT_FOUND -1
 #define ENCRYPTION_LAYER_INDEX -69
+#define MAX_INPUT_SIZE -69
+enum class type
+{
+  int_,
+  file,
+  string,
+  bytes,
+};
 class encryptor_singletone
 {
 public:
   static bytes encode(const std::string &encryptor_name,
-                      std::vector<bytes> input)
+                      std::vector<std::pair<type, types>> input)
   {
 
     return {};
@@ -27,6 +37,18 @@ struct encoder_options
   bytes nonce;
   bytes aad;
 };
+inline bytes readFile(const std::string &filePath)
+
+{
+  std::ifstream file(filePath, std::ios::in | std::ios::binary);
+  if (!file.is_open())
+  {
+    throw std::runtime_error("file '" + filePath + "' not found.");
+  }
+  bytes data((std::istreambuf_iterator<char>(file)),
+             std::istreambuf_iterator<char>());
+  return data;
+}
 class node
 {
   node DependentByIndex(int index) { return {}; }
@@ -38,15 +60,15 @@ public:
   encoder_options cryptor_options;
   // input number to node witch returns
   std::map<int, int> input_redirector;
+  std::vector<std::pair<type, types>> input;
   bytes last_return;
   size_t input_size;
   bytes encrypt()
   {
-    std::vector<bytes> input;
     input.resize(input_size);
     for (auto &a : input_redirector)
     {
-      input[a.first] = dependencies[a.second].encrypt();
+      input[a.first] = {type::bytes, dependencies[a.second].encrypt()};
     }
     last_return = encryptor_singletone::encode(this->name, input);
 
@@ -150,24 +172,7 @@ enum ConnectionType
   Client,
   Server
 };
-enum class type
-{
-  int_,
-  file,
-  string,
-};
-inline bytes readFile(const std::string &filePath)
-{
-  std::ifstream file(filePath, std::ios::in | std::ios::binary);
-  if (!file.is_open())
-  {
-    throw std::runtime_error("file '" + filePath + "' not found.");
-  }
-  bytes data((std::istreambuf_iterator<char>(file)),
-             std::istreambuf_iterator<char>());
-  return data;
-}
-std::pair<type, std::variant<bytes, std::string, int>>
+std::pair<type, types>
 evaluateExpression(const std::string &expression)
 {
   std::regex int_regex(R"(^int\((\d+)\)$)");
@@ -190,13 +195,23 @@ node evaluateNode(const Json::Value &json_node, node &existing_node)
 {
   for (auto iterator = json_node.begin(); iterator != json_node.end(); iterator++)
   {
+
     if (iterator.key() == "input")
     {
       switch (iterator->type())
       {
       case Json::ValueType::arrayValue:
-
-      break;
+        int x = 0;
+        for (const auto &item : *iterator)
+        {
+          if (parseExpression(iterator->asString()).first == INDEX_DEPENDECIES_NOT_FOUND)
+          {
+            existing_node.input.resize(MAX_INPUT_SIZE);
+            existing_node.input[x] = evaluateExpression(item.asString());
+          }
+          x++;
+        }
+        break;
       default:
         break;
       }
