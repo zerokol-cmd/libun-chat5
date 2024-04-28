@@ -14,7 +14,7 @@ using types = std::variant<bytes, std::string, int>;
 
 #define INDEX_DEPENDECIES_NOT_FOUND -1
 #define ENCRYPTION_LAYER_INDEX -69
-#define MAX_INPUT_SIZE -69
+#define MAX_INPUT_SIZE 1000
 enum class type
 {
   int_,
@@ -28,7 +28,6 @@ public:
   static bytes encode(const std::string &encryptor_name,
                       std::vector<std::pair<type, types>> input)
   {
-
     return {};
   }
 };
@@ -195,11 +194,14 @@ node evaluateNode(const Json::Value &json_node, node &existing_node)
 {
   for (auto iterator = json_node.begin(); iterator != json_node.end(); iterator++)
   {
-
     if (iterator.key() == "input")
     {
       switch (iterator->type())
       {
+      case Json::ValueType::stringValue:
+        existing_node.input.resize(MAX_INPUT_SIZE);
+        existing_node.input[0] = evaluateExpression(iterator->asString());
+        break;
       case Json::ValueType::arrayValue:
         int x = 0;
         for (const auto &item : *iterator)
